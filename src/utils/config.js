@@ -2,11 +2,22 @@ const { readFileSync, existsSync } = require('fs');
 const path = require('path');
 
 function loadConfig() {
+  // Prioridade 1: variáveis de ambiente do processo (Docker / CI)
+  if (process.env.DISCORD_TOKEN && process.env.DISCORD_CLIENT_ID) {
+    return {
+      token: process.env.DISCORD_TOKEN,
+      clientId: process.env.DISCORD_CLIENT_ID,
+      databasePath: process.env.DATABASE_PATH || './data/dilo.db',
+    };
+  }
+
+  // Prioridade 2: arquivo env.json (desenvolvimento local)
   const envPath = path.resolve(__dirname, '../../env.json');
 
   if (!existsSync(envPath)) {
-    console.error('❌ Arquivo env.json não encontrado na raiz do projeto.');
-    console.error('   Copie env.example.json para env.json e preencha as variáveis.');
+    console.error('❌ Configuração não encontrada.');
+    console.error('   Em produção: defina DISCORD_TOKEN e DISCORD_CLIENT_ID como variáveis de ambiente.');
+    console.error('   Em desenvolvimento: copie env.example.json para env.json e preencha as variáveis.');
     process.exit(1);
   }
 
