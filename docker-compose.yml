@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  dilo-bot:
+    build: .
+    image: ghcr.io/devyor-fun/discord-bot-dilo:latest
+    container_name: dilo-bot
+    restart: unless-stopped
+    volumes:
+      - ./env.json:/app/env.json:ro
+      - dilo-data:/app/data
+    environment:
+      - NODE_ENV=production
+
+volumes:
+  dilo-data:
+    driver: local

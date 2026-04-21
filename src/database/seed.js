@@ -1,0 +1,266 @@
+const Database = require('better-sqlite3');
+const path = require('path');
+
+// Carrega config manualmente para o script de seed
+const { readFileSync, existsSync, mkdirSync } = require('fs');
+
+let dbPath = './data/dilo.db';
+const envPath = path.resolve(__dirname, '../../env.json');
+if (existsSync(envPath)) {
+  const config = JSON.parse(readFileSync(envPath, 'utf-8'));
+  if (config.DATABASE_PATH) dbPath = config.DATABASE_PATH;
+}
+
+const fullPath = path.resolve(__dirname, '../../', dbPath);
+const dir = path.dirname(fullPath);
+if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+const db = new Database(fullPath);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS question_pairs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_normal TEXT NOT NULL,
+    question_impostor TEXT NOT NULL,
+    category TEXT DEFAULT 'geral'
+  );
+`);
+
+// 200 duplas de perguntas correlatas
+const pairs = [
+  // ===== COMIDA E BEBIDA (1-30) =====
+  ["Qual sua fruta favorita?", "Qual sua sobremesa favorita?", "comida"],
+  ["Qual seu prato preferido no almoço?", "Qual seu prato preferido no jantar?", "comida"],
+  ["Qual refrigerante você mais gosta?", "Qual suco você mais gosta?", "comida"],
+  ["Qual seu sabor de pizza favorito?", "Qual seu sabor de sorvete favorito?", "comida"],
+  ["Qual comida de rua você mais gosta?", "Qual comida caseira você mais gosta?", "comida"],
+  ["Qual seu café da manhã ideal?", "Qual seu lanche da tarde ideal?", "comida"],
+  ["Qual tempero você mais usa na cozinha?", "Qual molho você mais usa na cozinha?", "comida"],
+  ["Qual doce de festa junina você prefere?", "Qual comida de festa junina você prefere?", "comida"],
+  ["Qual tipo de carne você mais gosta?", "Qual tipo de salada você mais gosta?", "comida"],
+  ["Qual chá você mais gosta de tomar?", "Qual café você mais gosta de tomar?", "comida"],
+  ["Qual comida japonesa você prefere?", "Qual comida italiana você prefere?", "comida"],
+  ["Qual seu sabor de bolo favorito?", "Qual seu sabor de torta favorito?", "comida"],
+  ["Qual petisco você come no cinema?", "Qual petisco você come em casa?", "comida"],
+  ["Qual queijo você mais gosta?", "Qual pão você mais gosta?", "comida"],
+  ["Qual comida você pediria como última refeição?", "Qual comida você nunca mais comeria?", "comida"],
+  ["Qual bebida quente você prefere no inverno?", "Qual bebida gelada você prefere no verão?", "comida"],
+  ["Qual seu recheio de sanduíche favorito?", "Qual seu recheio de pastel favorito?", "comida"],
+  ["Qual massa você mais gosta?", "Qual arroz você mais gosta?", "comida"],
+  ["Qual vegetal você mais gosta de comer?", "Qual vegetal você menos gosta de comer?", "comida"],
+  ["Qual fast food é seu favorito?", "Qual restaurante fino é seu favorito?", "comida"],
+  ["Qual comida de aniversário você prefere?", "Qual comida de Natal você prefere?", "comida"],
+  ["Qual sabor de chips você mais gosta?", "Qual sabor de biscoito você mais gosta?", "comida"],
+  ["Qual sopa você mais gosta?", "Qual caldo você mais gosta?", "comida"],
+  ["Qual comida mexicana você prefere?", "Qual comida chinesa você prefere?", "comida"],
+  ["Qual sua vitamina de fruta favorita?", "Qual seu milkshake favorito?", "comida"],
+  ["Qual comida de boteco você mais pede?", "Qual comida de padaria você mais pede?", "comida"],
+  ["Qual molho de salada você prefere?", "Qual tempero de churrasco você prefere?", "comida"],
+  ["Qual cereal matinal você mais gosta?", "Qual granola ou barra você mais gosta?", "comida"],
+  ["Qual comida congelada você mais compra?", "Qual comida delivery você mais pede?", "comida"],
+  ["Qual sobremesa de restaurante você sempre pede?", "Qual entrada de restaurante você sempre pede?", "comida"],
+
+  // ===== ENTRETENIMENTO (31-60) =====
+  ["Qual seu filme favorito?", "Qual sua série favorita?", "entretenimento"],
+  ["Qual gênero de música você mais ouve?", "Qual gênero de filme você mais assiste?", "entretenimento"],
+  ["Qual seu jogo de videogame favorito?", "Qual seu jogo de tabuleiro favorito?", "entretenimento"],
+  ["Qual seu cantor favorito?", "Qual sua banda favorita?", "entretenimento"],
+  ["Qual seu programa de TV favorito da infância?", "Qual seu desenho animado favorito da infância?", "entretenimento"],
+  ["Qual livro marcou sua vida?", "Qual filme marcou sua vida?", "entretenimento"],
+  ["Qual plataforma de streaming você mais usa?", "Qual rede social você mais usa?", "entretenimento"],
+  ["Qual seu super-herói favorito?", "Qual seu vilão favorito?", "entretenimento"],
+  ["Qual tipo de podcast você mais ouve?", "Qual tipo de canal do YouTube você mais assiste?", "entretenimento"],
+  ["Qual seu personagem de anime favorito?", "Qual seu personagem de filme favorito?", "entretenimento"],
+  ["Qual console de videogame você prefere?", "Qual marca de celular você prefere?", "entretenimento"],
+  ["Qual música você ouviria em loop?", "Qual música você não aguenta mais ouvir?", "entretenimento"],
+  ["Qual seu ator favorito?", "Qual sua atriz favorita?", "entretenimento"],
+  ["Qual reality show você mais gosta?", "Qual programa de auditório você mais gosta?", "entretenimento"],
+  ["Qual seu gênero de livro favorito?", "Qual seu gênero de jogo favorito?", "entretenimento"],
+  ["Qual seu filme de comédia favorito?", "Qual seu filme de terror favorito?", "entretenimento"],
+  ["Qual sua música para dançar?", "Qual sua música para relaxar?", "entretenimento"],
+  ["Qual seu youtuber favorito?", "Qual seu streamer favorito?", "entretenimento"],
+  ["Qual seu app de jogo favorito no celular?", "Qual seu app favorito no celular?", "entretenimento"],
+  ["Qual série você reassistiria do zero?", "Qual filme você reassistiria do zero?", "entretenimento"],
+  ["Qual seu documentário favorito?", "Qual sua animação favorita?", "entretenimento"],
+  ["Qual instrumento musical você gostaria de tocar?", "Qual idioma você gostaria de falar?", "entretenimento"],
+  ["Qual festival de música você iria?", "Qual evento esportivo você iria?", "entretenimento"],
+  ["Qual seu personagem de jogo favorito?", "Qual seu personagem de série favorito?", "entretenimento"],
+  ["Qual seu álbum de música favorito?", "Qual sua trilha sonora de filme favorita?", "entretenimento"],
+  ["Qual quadrinho ou mangá você mais gosta?", "Qual graphic novel você mais gosta?", "entretenimento"],
+  ["Qual jogo de cartas você mais gosta?", "Qual jogo de festa você mais gosta?", "entretenimento"],
+  ["Qual seu comediante favorito?", "Qual seu apresentador de TV favorito?", "entretenimento"],
+  ["Qual seu filme da Disney favorito?", "Qual seu filme da Pixar favorito?", "entretenimento"],
+  ["Qual karaokê você sempre canta?", "Qual música você canta no chuveiro?", "entretenimento"],
+
+  // ===== VIAGEM E LUGARES (61-85) =====
+  ["Qual país você mais quer visitar?", "Qual cidade do Brasil você mais quer visitar?", "viagem"],
+  ["Qual praia é sua favorita?", "Qual montanha é sua favorita?", "viagem"],
+  ["Qual seu meio de transporte favorito?", "Qual seu tipo de viagem favorito?", "viagem"],
+  ["Qual lugar você visitaria de novo?", "Qual lugar você nunca mais voltaria?", "viagem"],
+  ["Qual hotel dos sonhos você ficaria?", "Qual tipo de hospedagem você prefere?", "viagem"],
+  ["Qual parque temático você mais quer ir?", "Qual museu você mais quer visitar?", "viagem"],
+  ["Qual cidade grande você moraria?", "Qual cidade pequena você moraria?", "viagem"],
+  ["Qual destino de lua de mel você escolheria?", "Qual destino de férias em família você escolheria?", "viagem"],
+  ["Qual comida típica de viagem você mais gostou?", "Qual souvenir de viagem você mais gostou?", "viagem"],
+  ["Qual aeroporto você mais gosta?", "Qual estação de trem você mais gosta?", "viagem"],
+  ["Qual seu lugar favorito na sua cidade?", "Qual seu lugar favorito para passear?", "viagem"],
+  ["Qual país da Europa você visitaria primeiro?", "Qual país da Ásia você visitaria primeiro?", "viagem"],
+  ["Qual aventura ao ar livre você faria?", "Qual esporte radical você faria?", "viagem"],
+  ["Qual resort você gostaria de ir?", "Qual camping você gostaria de ir?", "viagem"],
+  ["Qual cruzeiro marítimo você faria?", "Qual road trip você faria?", "viagem"],
+  ["Qual ponto turístico do Brasil você mais gosta?", "Qual ponto turístico do mundo você mais gosta?", "viagem"],
+  ["Qual clima você prefere para viajar?", "Qual estação do ano você prefere para viajar?", "viagem"],
+  ["Qual ilha paradisíaca você visitaria?", "Qual deserto famoso você visitaria?", "viagem"],
+  ["Qual feira ou mercado de rua você mais gostou?", "Qual shopping center você mais gostou?", "viagem"],
+  ["Qual trilha na natureza você faria?", "Qual passeio de barco você faria?", "viagem"],
+  ["Qual cidade histórica você visitaria?", "Qual cidade futurista você visitaria?", "viagem"],
+  ["Qual zoológico ou aquário você mais gosta?", "Qual jardim botânico você mais gosta?", "viagem"],
+  ["Qual viagem de trem cênica você faria?", "Qual viagem de balão você faria?", "viagem"],
+  ["Qual festival cultural você gostaria de ir?", "Qual carnaval do mundo você gostaria de ir?", "viagem"],
+  ["Qual maravilha do mundo você quer ver?", "Qual patrimônio da UNESCO você quer ver?", "viagem"],
+
+  // ===== VIDA PESSOAL (86-115) =====
+  ["Qual seu hobby favorito?", "Qual hobby você gostaria de começar?", "pessoal"],
+  ["Qual sua cor favorita?", "Qual cor você menos gosta?", "pessoal"],
+  ["Qual seu animal de estimação favorito?", "Qual animal selvagem você mais admira?", "pessoal"],
+  ["Qual sua estação do ano favorita?", "Qual mês do ano é seu favorito?", "pessoal"],
+  ["Qual superpoder você teria?", "Qual habilidade especial você teria?", "pessoal"],
+  ["Qual profissão você teria se não fosse a atual?", "Qual profissão você nunca teria?", "pessoal"],
+  ["Qual seu maior medo?", "Qual sua maior coragem?", "pessoal"],
+  ["Qual seu dia da semana favorito?", "Qual horário do dia é seu favorito?", "pessoal"],
+  ["Qual matéria da escola você mais gostava?", "Qual matéria da escola você menos gostava?", "pessoal"],
+  ["Qual cheiro você mais gosta?", "Qual som você mais gosta?", "pessoal"],
+  ["Qual sua roupa favorita para usar?", "Qual acessório você sempre usa?", "pessoal"],
+  ["Qual presente você mais gostou de receber?", "Qual presente você mais gostou de dar?", "pessoal"],
+  ["Qual seu maior sonho?", "Qual sua maior conquista?", "pessoal"],
+  ["Qual celebridade você gostaria de conhecer?", "Qual pessoa histórica você gostaria de conhecer?", "pessoal"],
+  ["Qual hábito bom você tem?", "Qual hábito ruim você tem?", "pessoal"],
+  ["Qual sua frase motivacional favorita?", "Qual conselho você sempre dá?", "pessoal"],
+  ["Qual seu tipo de festa favorito?", "Qual sua comemoração favorita?", "pessoal"],
+  ["Qual talento escondido você tem?", "Qual talento você gostaria de ter?", "pessoal"],
+  ["Qual sua memória favorita da infância?", "Qual sua memória favorita recente?", "pessoal"],
+  ["Qual seu esporte favorito para assistir?", "Qual seu esporte favorito para praticar?", "pessoal"],
+  ["Qual sua flor favorita?", "Qual sua árvore favorita?", "pessoal"],
+  ["Qual seu perfume favorito?", "Qual seu sabonete favorito?", "pessoal"],
+  ["Qual rede social você mais gosta?", "Qual rede social você menos gosta?", "pessoal"],
+  ["Qual tipo de clima você prefere?", "Qual tipo de paisagem você prefere?", "pessoal"],
+  ["Qual seu emoji favorito?", "Qual sua figurinha favorita?", "pessoal"],
+  ["Qual seu aplicativo mais usado?", "Qual seu site mais acessado?", "pessoal"],
+  ["Qual sua bebida alcoólica favorita?", "Qual sua bebida não alcoólica favorita?", "pessoal"],
+  ["Qual seu tipo de humor favorito?", "Qual piada você sempre conta?", "pessoal"],
+  ["Qual seu lema de vida?", "Qual sua palavra favorita?", "pessoal"],
+  ["Qual tradição familiar você mais gosta?", "Qual tradição de Natal você mais gosta?", "pessoal"],
+
+  // ===== HIPOTÉTICOS E DILEMAS (116-145) =====
+  ["Se pudesse viajar no tempo, iria ao passado ou futuro?", "Se pudesse teletransportar, iria para qual lugar?", "hipotetico"],
+  ["Se ganhasse na loteria, o que faria primeiro?", "Se tivesse um dia sem consequências, o que faria?", "hipotetico"],
+  ["Se fosse um animal, qual seria?", "Se fosse uma planta, qual seria?", "hipotetico"],
+  ["Se pudesse jantar com alguém famoso, quem seria?", "Se pudesse trabalhar com alguém famoso, quem seria?", "hipotetico"],
+  ["Se tivesse que morar em outro país, qual escolheria?", "Se tivesse que aprender outro idioma, qual escolheria?", "hipotetico"],
+  ["Se fosse personagem de filme, quem seria?", "Se fosse personagem de livro, quem seria?", "hipotetico"],
+  ["Se pudesse ter qualquer carro, qual seria?", "Se pudesse ter qualquer casa, como seria?", "hipotetico"],
+  ["Se tivesse que comer uma coisa pro resto da vida, o que seria?", "Se tivesse que ouvir uma música pro resto da vida, qual seria?", "hipotetico"],
+  ["Se pudesse mudar uma coisa no mundo, o que seria?", "Se pudesse mudar uma coisa em você, o que seria?", "hipotetico"],
+  ["Se fosse invisível por um dia, o que faria?", "Se pudesse voar por um dia, o que faria?", "hipotetico"],
+  ["Se tivesse uma máquina do tempo, qual época visitaria?", "Se tivesse um portal dimensional, qual mundo visitaria?", "hipotetico"],
+  ["Se pudesse dominar qualquer instrumento, qual seria?", "Se pudesse dominar qualquer esporte, qual seria?", "hipotetico"],
+  ["Se escrevesse um livro, sobre o que seria?", "Se dirigisse um filme, sobre o que seria?", "hipotetico"],
+  ["Se pudesse reviver um momento, qual seria?", "Se pudesse apagar um momento, qual seria?", "hipotetico"],
+  ["Se tivesse que sobreviver numa ilha deserta, o que levaria?", "Se tivesse que sobreviver num apocalipse zumbi, o que levaria?", "hipotetico"],
+  ["Se fosse um super-herói, qual seria seu nome?", "Se fosse um vilão, qual seria seu nome?", "hipotetico"],
+  ["Se pudesse ter um robô assistente, o que ele faria?", "Se pudesse ter um clone, o que ele faria?", "hipotetico"],
+  ["Se acordasse em 2050, o que faria primeiro?", "Se acordasse em 1900, o que faria primeiro?", "hipotetico"],
+  ["Se tivesse que escolher entre fama ou fortuna, qual escolheria?", "Se tivesse que escolher entre sabedoria ou juventude eterna, qual escolheria?", "hipotetico"],
+  ["Se pudesse falar com animais, qual falaria primeiro?", "Se pudesse falar com objetos, qual falaria primeiro?", "hipotetico"],
+  ["Se fosse presidente por um dia, o que faria?", "Se fosse diretor de escola por um dia, o que faria?", "hipotetico"],
+  ["Se pudesse ter qualquer pet exótico, qual teria?", "Se pudesse ter qualquer poder mágico, qual teria?", "hipotetico"],
+  ["Se sua vida fosse um filme, qual seria o gênero?", "Se sua vida fosse uma música, qual seria o estilo?", "hipotetico"],
+  ["Se pudesse inventar algo, o que seria?", "Se pudesse descobrir algo, o que seria?", "hipotetico"],
+  ["Se tivesse que viver sem internet ou sem TV, qual escolheria?", "Se tivesse que viver sem música ou sem filmes, qual escolheria?", "hipotetico"],
+  ["Se encontrasse uma lâmpada mágica, quais seriam seus 3 desejos?", "Se encontrasse um gênio, qual pergunta faria?", "hipotetico"],
+  ["Se pudesse trocar de vida com alguém por um dia, quem seria?", "Se pudesse trocar de profissão por um dia, qual seria?", "hipotetico"],
+  ["Se tivesse que escolher um tema para festa, qual seria?", "Se tivesse que escolher um tema para tatuagem, qual seria?", "hipotetico"],
+  ["Se pudesse criar uma lei, qual seria?", "Se pudesse abolir uma lei, qual seria?", "hipotetico"],
+  ["Se tivesse que descrever sua vida em uma palavra, qual seria?", "Se tivesse que descrever o mundo em uma palavra, qual seria?", "hipotetico"],
+
+  // ===== PREFERÊNCIAS E OPINIÕES (146-175) =====
+  ["Praia ou campo?", "Montanha ou cidade?", "preferencia"],
+  ["Manhã ou noite?", "Verão ou inverno?", "preferencia"],
+  ["Doce ou salgado?", "Quente ou frio?", "preferencia"],
+  ["Livro físico ou e-book?", "Cinema ou streaming?", "preferencia"],
+  ["Gato ou cachorro?", "Pássaro ou peixe?", "preferencia"],
+  ["Chuva ou sol?", "Neve ou calor?", "preferencia"],
+  ["Cozinhar ou pedir delivery?", "Comer em casa ou no restaurante?", "preferencia"],
+  ["Festa grande ou reunião íntima?", "Balada ou barzinho?", "preferencia"],
+  ["Trabalho remoto ou presencial?", "Estudar sozinho ou em grupo?", "preferencia"],
+  ["Viajar de avião ou de carro?", "Viajar sozinho ou acompanhado?", "preferencia"],
+  ["Acordar cedo ou dormir tarde?", "Planejar tudo ou ser espontâneo?", "preferencia"],
+  ["Música alta ou música baixa?", "Silêncio ou barulho de fundo?", "preferencia"],
+  ["Foto ou vídeo?", "Texto ou áudio?", "preferencia"],
+  ["Natal ou Ano Novo?", "Carnaval ou São João?", "preferencia"],
+  ["Sapato ou tênis?", "Calça ou bermuda?", "preferencia"],
+  ["Pizza ou hambúrguer?", "Sushi ou churrasco?", "preferencia"],
+  ["Futebol ou vôlei?", "Basquete ou natação?", "preferencia"],
+  ["Série ou filme?", "Podcast ou rádio?", "preferencia"],
+  ["WhatsApp ou Telegram?", "Instagram ou TikTok?", "preferencia"],
+  ["Banho quente ou banho frio?", "Banho rápido ou banho demorado?", "preferencia"],
+  ["Cabelo curto ou cabelo longo?", "Barba ou sem barba?", "preferencia"],
+  ["Café preto ou café com leite?", "Com açúcar ou sem açúcar?", "preferencia"],
+  ["Ler notícias ou assistir notícias?", "Jornal ou revista?", "preferencia"],
+  ["Apartamento ou casa?", "Cidade grande ou cidade pequena?", "preferencia"],
+  ["Andar descalço ou de chinelo?", "Meia ou sem meia?", "preferencia"],
+  ["Escrever à mão ou digitar?", "Agenda física ou digital?", "preferencia"],
+  ["Elevador ou escada?", "Escada rolante ou esteira?", "preferencia"],
+  ["Fone de ouvido ou caixa de som?", "Bluetooth ou com fio?", "preferencia"],
+  ["Papel higiênico dobrado ou amassado?", "Toalha de papel ou secador de mãos?", "preferencia"],
+  ["Janela aberta ou fechada para dormir?", "Luz acesa ou apagada para dormir?", "preferencia"],
+
+  // ===== CULTURA E CONHECIMENTO (176-200) =====
+  ["Qual período da história mais te fascina?", "Qual civilização antiga mais te fascina?", "cultura"],
+  ["Qual descoberta científica você acha mais importante?", "Qual invenção você acha mais importante?", "cultura"],
+  ["Qual idioma soa mais bonito?", "Qual escrita parece mais bonita?", "cultura"],
+  ["Qual mitologia você mais gosta?", "Qual lenda urbana você mais gosta?", "cultura"],
+  ["Qual planeta do sistema solar te intriga mais?", "Qual fenômeno natural te intriga mais?", "cultura"],
+  ["Qual sua matéria favorita na escola?", "Qual curso você faria por diversão?", "cultura"],
+  ["Qual cientista você mais admira?", "Qual artista você mais admira?", "cultura"],
+  ["Qual estilo de arte você mais gosta?", "Qual estilo de arquitetura você mais gosta?", "cultura"],
+  ["Qual sua curiosidade favorita sobre o espaço?", "Qual sua curiosidade favorita sobre o oceano?", "cultura"],
+  ["Qual filosofia de vida te inspira?", "Qual provérbio te inspira?", "cultura"],
+  ["Qual museu do mundo você mais quer visitar?", "Qual biblioteca do mundo você mais quer visitar?", "cultura"],
+  ["Qual fato histórico mais te surpreende?", "Qual teoria científica mais te surpreende?", "cultura"],
+  ["Qual tradição cultural de outro país te atrai?", "Qual culinária de outro país te atrai?", "cultura"],
+  ["Qual sua opinião sobre inteligência artificial?", "Qual sua opinião sobre exploração espacial?", "cultura"],
+  ["Qual gênero literário você mais gosta?", "Qual gênero cinematográfico você mais gosta?", "cultura"],
+  ["Qual esporte olímpico é o mais emocionante?", "Qual esporte de inverno é o mais emocionante?", "cultura"],
+  ["Qual dança você gostaria de aprender?", "Qual arte marcial você gostaria de aprender?", "cultura"],
+  ["Qual religião ou filosofia te desperta curiosidade?", "Qual cultura indígena te desperta curiosidade?", "cultura"],
+  ["Qual tecnologia do futuro te anima mais?", "Qual avanço médico do futuro te anima mais?", "cultura"],
+  ["Qual obra de arte é a mais icônica?", "Qual monumento é o mais icônico?", "cultura"],
+  ["Qual compositor clássico você mais gosta?", "Qual pintor clássico você mais gosta?", "cultura"],
+  ["Qual enigma da humanidade te fascina?", "Qual mistério não resolvido te fascina?", "cultura"],
+  ["Qual revolução histórica foi mais impactante?", "Qual movimento social foi mais impactante?", "cultura"],
+  ["Qual sua teoria conspiratória favorita (por diversão)?", "Qual lenda urbana brasileira é sua favorita?", "cultura"],
+  ["Qual é o sentido da vida para você?", "Qual é a coisa mais importante na vida para você?", "cultura"],
+];
+
+// Limpar e inserir
+db.exec('DELETE FROM question_pairs');
+
+const insert = db.prepare(
+  'INSERT INTO question_pairs (question_normal, question_impostor, category) VALUES (?, ?, ?)'
+);
+
+const insertMany = db.transaction((pairs) => {
+  for (const [normal, impostor, category] of pairs) {
+    insert.run(normal, impostor, category);
+  }
+});
+
+insertMany(pairs);
+
+const count = db.prepare('SELECT COUNT(*) as total FROM question_pairs').get();
+console.log(`✅ Seed concluído! ${count.total} duplas de perguntas inseridas.`);
+
+db.close();
