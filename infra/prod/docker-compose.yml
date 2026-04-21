@@ -1,0 +1,15 @@
+services:
+    discord-bot-dilo:
+        image: ghcr.io/devyor-dot-fun/discord-bot-dilo:main
+        container_name: discord-bot-dilo
+        restart: unless-stopped
+        environment:
+            - DISCORD_TOKEN=${DISCORD_TOKEN}
+            - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+            - DATABASE_PATH=/app/data/dilo.db
+        volumes:
+            - dilo-data:/app/data
+
+volumes:
+    dilo-data:
+        driver: local
