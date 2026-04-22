@@ -39,16 +39,20 @@ const Emojis = {
   DM: '📩',
   SETTINGS: '⚙️',
   CHART: '📊',
+  PENCIL: '✍️',
 };
+
+// Letras usadas para identificar respostas anonimamente
+const AnswerLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O'];
 
 // Configurações do jogo
 const GameConfig = {
   MIN_PLAYERS: 3,
   MAX_PLAYERS: 15,
-  LOBBY_TIMEOUT: 120_000,       // 2 minutos para lobby
-  VOTING_TIMEOUT: 60_000,       // 1 minuto para votação
-  ANSWER_TIMEOUT: 90_000,       // 1.5 minuto para responder
-  ROUND_DELAY: 3_000,           // 3 segundos entre fases
+  LOBBY_TIMEOUT: 120_000,         // 2 minutos para lobby
+  ANSWERING_TIMEOUT: 120_000,     // 2 minutos para todos responderem
+  VOTING_TIMEOUT: 60_000,         // 1 minuto para votação
+  ROUND_DELAY: 3_000,             // 3 segundos entre fases
 };
 
-module.exports = { Colors, Emojis, GameConfig };
+module.exports = { Colors, Emojis, GameConfig, AnswerLabels };

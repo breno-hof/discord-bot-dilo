@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { Colors, Emojis, GameConfig } = require('./constants');
 
 /**
@@ -9,9 +9,6 @@ const DiloEmbeds = {
   // LOBBY
   // ==========================================
 
-  /**
-   * Embed do lobby aguardando jogadores.
-   */
   lobby(players, hostId, guildName) {
     const playerList = players.length > 0
       ? players.map(p => {
@@ -42,121 +39,108 @@ const DiloEmbeds = {
   },
 
   // ==========================================
-  // JOGO EM ANDAMENTO
+  // INÍCIO DA RODADA
   // ==========================================
 
-  /**
-   * Embed de início da rodada.
-   */
-  roundStart(playerOrder, players) {
-    const orderList = playerOrder.map((id, i) => {
-      const player = players.find(p => p.id === id);
-      const name = player ? player.displayName : 'Desconhecido';
-      return `**${i + 1}.** <@${id}>`;
-    }).join('\n');
-
+  roundStart(playerCount) {
     return new EmbedBuilder()
       .setTitle(`${Emojis.FIRE} Rodada Iniciada!`)
       .setDescription(
-        `${Emojis.DM} As perguntas foram enviadas por **DM** para cada jogador.\n` +
+        `${Emojis.DM} As perguntas foram enviadas por **DM** para todos os **${playerCount}** jogadores.\n\n` +
         `${Emojis.EYE} Um de vocês é o **Impostor** e recebeu uma pergunta diferente!\n\n` +
-        `${Emojis.SCROLL} **Ordem de respostas:**\n${orderList}\n\n` +
-        `Cada jogador deve responder **no canal** quando for sua vez.\n` +
-        `Prestem atenção nas respostas para descobrir o impostor!`
+        `${Emojis.PENCIL} Cada jogador deve responder **na sua DM**.\n` +
+        `Quando todos responderem, a votação começará automaticamente.`
       )
       .setColor(Colors.IN_GAME)
-      .setFooter({ text: 'Dilo — Descubra o Impostor!' })
+      .setFooter({ text: 'Dilo — Responda na sua DM!' })
       .setTimestamp();
   },
 
-  /**
-   * Embed indicando de quem é a vez de responder.
-   */
-  playerTurn(player, turnNumber, totalPlayers) {
+  // ==========================================
+  // AGUARDANDO RESPOSTAS (mensagem no canal)
+  // ==========================================
+
+  awaitingAnswers(answeredCount, totalPlayers) {
+    const remaining = totalPlayers - answeredCount;
+    const bar = '█'.repeat(answeredCount) + '░'.repeat(remaining);
+
     return new EmbedBuilder()
-      .setTitle(`${Emojis.QUESTION} Vez de Responder`)
+      .setTitle(`${Emojis.HOURGLASS} Aguardando Respostas`)
       .setDescription(
-        `${Emojis.TARGET} É a vez de <@${player.id}> responder!\n\n` +
-        `Responda à pergunta que recebeu na sua DM.\n` +
-        `Use o botão abaixo para enviar sua resposta.`
-      )
-      .addFields(
-        { name: `${Emojis.CHART} Progresso`, value: `Jogador **${turnNumber}** de **${totalPlayers}**`, inline: true },
+        `\`${bar}\` **${answeredCount}/${totalPlayers}** responderam\n\n` +
+        `${Emojis.DM} Verifique sua DM e clique em **Responder**!`
       )
       .setColor(Colors.IN_GAME)
-      .setFooter({ text: 'Dilo — Responda com sabedoria!' })
+      .setFooter({ text: 'Dilo — A votação começa quando todos responderem' })
       .setTimestamp();
   },
 
-  /**
-   * Embed mostrando a resposta de um jogador.
-   */
-  playerAnswer(player, answer, turnNumber) {
-    return new EmbedBuilder()
-      .setDescription(
-        `${Emojis.PLAYER} **<@${player.id}>** respondeu:\n\n` +
-        `> ${answer}`
-      )
-      .setColor(Colors.IN_GAME)
-      .setFooter({ text: `Resposta ${turnNumber}` });
-  },
-
   // ==========================================
-  // DM - PERGUNTA
+  // DM — PERGUNTA + BOTÃO RESPONDER
   // ==========================================
 
   /**
-   * Embed enviado por DM com a pergunta.
+   * Retorna { embed, row } para enviar via DM com botão de resposta.
    */
-  questionDM(question, isImpostor, orderPosition) {
+  questionDM(question, isImpostor) {
     const roleText = isImpostor
       ? `${Emojis.IMPOSTOR} Você é o **IMPOSTOR**! Sua pergunta é diferente dos outros.`
       : `${Emojis.SHIELD} Você é um **jogador normal**. Responda naturalmente!`;
 
     const tipText = isImpostor
-      ? `**Dica:** Tente responder de forma que pareça natural. Não levante suspeitas!`
+      ? `**Dica:** Responda de forma convincente para não levantar suspeitas!`
       : `**Dica:** Preste atenção nas respostas dos outros para encontrar o impostor.`;
 
-    return new EmbedBuilder()
+    const embed = new EmbedBuilder()
       .setTitle(`${Emojis.LOCK} Sua Pergunta Secreta`)
       .setDescription(
         `${roleText}\n\n` +
         `${Emojis.QUESTION} **Pergunta:**\n> ${question}\n\n` +
         `${Emojis.SPARKLE} ${tipText}\n\n` +
-        `${Emojis.CLOCK} Você é o **${orderPosition}º** a responder.`
+        `${Emojis.PENCIL} Clique no botão abaixo para enviar sua resposta.`
       )
       .setColor(isImpostor ? Colors.DEFEAT : Colors.VICTORY)
       .setFooter({ text: 'Dilo — Não mostre esta mensagem a ninguém!' })
       .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('dilo_dm_answer')
+        .setLabel('Responder')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✍️'),
+    );
+
+    return { embed, row };
   },
 
   // ==========================================
-  // VOTAÇÃO
+  // VOTAÇÃO ANÔNIMA
   // ==========================================
 
   /**
-   * Embed da fase de votação.
+   * Exibe as respostas anônimas por letra para votação.
+   * @param {Array<{label, answer}>} anonymousAnswers
    */
-  votingPhase(players, answers) {
-    const answerList = players.map(p => {
-      const answer = answers[p.id] || '*Não respondeu*';
-      return `${Emojis.PLAYER} **<@${p.id}>:**\n> ${answer}`;
-    }).join('\n\n');
+  votingPhase(anonymousAnswers) {
+    const answerList = anonymousAnswers.map(({ label, answer }) =>
+      `**Resposta ${label}:**\n> ${answer}`
+    ).join('\n\n');
 
     return new EmbedBuilder()
       .setTitle(`${Emojis.VOTE} Hora de Votar!`)
       .setDescription(
-        `${Emojis.EYE} Todas as respostas foram dadas. Revise e vote em quem você acha que é o **Impostor**!\n\n` +
-        `**Respostas:**\n\n${answerList}\n\n` +
-        `${Emojis.TARGET} Selecione o suspeito no menu abaixo.`
+        `${Emojis.EYE} Todas as respostas foram recebidas. Analise e vote em qual você acha que é do **Impostor**!\n\n` +
+        `${answerList}\n\n` +
+        `${Emojis.TARGET} Selecione a resposta suspeita no menu abaixo.`
       )
       .setColor(Colors.VOTING)
-      .setFooter({ text: 'Dilo — Quem é o Impostor?' })
+      .setFooter({ text: 'Dilo — As respostas são anônimas. Vote com sabedoria!' })
       .setTimestamp();
   },
 
   /**
-   * Embed de progresso da votação.
+   * Atualiza o progresso de votos na mensagem de votação.
    */
   votingProgress(votedCount, totalPlayers) {
     const bar = '█'.repeat(votedCount) + '░'.repeat(totalPlayers - votedCount);
@@ -174,21 +158,27 @@ const DiloEmbeds = {
 
   /**
    * Embed de resultado — Impostor descoberto (vitória dos jogadores).
+   * @param {object} results
    */
   resultImpostorCaught(results) {
-    const voteDetails = Object.entries(results.votes).map(([voterId, targetId]) => {
-      return `<@${voterId}> ${Emojis.TARGET} <@${targetId}>`;
-    }).join('\n');
+    const revealList = results.labelReveal.map(({ label, player, answer, votes, isImpostor }) => {
+      const tag = isImpostor ? ` ${Emojis.IMPOSTOR} **IMPOSTOR**` : '';
+      return (
+        `**Resposta ${label}** — <@${player.id}>${tag}\n` +
+        `> ${answer}\n` +
+        `${Emojis.VOTE} ${votes} voto(s)`
+      );
+    }).join('\n\n');
 
     return new EmbedBuilder()
       .setTitle(`${Emojis.CONFETTI} Impostor Descoberto!`)
       .setDescription(
         `${Emojis.TROPHY} Os jogadores venceram!\n\n` +
-        `${Emojis.IMPOSTOR} O impostor era: **<@${results.impostorId}>**\n\n` +
+        `${Emojis.IMPOSTOR} O impostor era **<@${results.impostorId}>** (Resposta **${results.impostorLabel}**)\n\n` +
         `**Perguntas da rodada:**\n` +
         `${Emojis.PLAYER} Normal: *"${results.questionPair.question_normal}"*\n` +
         `${Emojis.IMPOSTOR} Impostor: *"${results.questionPair.question_impostor}"*\n\n` +
-        `**Votos:**\n${voteDetails}`
+        `**Revelação das respostas:**\n\n${revealList}`
       )
       .setColor(Colors.VICTORY)
       .setFooter({ text: 'Dilo — Boa jogada!' })
@@ -197,26 +187,32 @@ const DiloEmbeds = {
 
   /**
    * Embed de resultado — Impostor escapou (vitória do impostor).
+   * @param {object} results
    */
   resultImpostorWon(results) {
     const reason = results.isTie
       ? `${Emojis.WARNING} Houve empate na votação! O impostor escapa automaticamente.`
-      : `${Emojis.CROSS} Os jogadores votaram em <@${results.mostVotedId}>, que era inocente!`;
+      : `${Emojis.CROSS} A Resposta **${results.mostVotedLabel}** foi a mais votada, mas era de um jogador inocente!`;
 
-    const voteDetails = Object.entries(results.votes).map(([voterId, targetId]) => {
-      return `<@${voterId}> ${Emojis.TARGET} <@${targetId}>`;
-    }).join('\n');
+    const revealList = results.labelReveal.map(({ label, player, answer, votes, isImpostor }) => {
+      const tag = isImpostor ? ` ${Emojis.IMPOSTOR} **IMPOSTOR**` : '';
+      return (
+        `**Resposta ${label}** — <@${player.id}>${tag}\n` +
+        `> ${answer}\n` +
+        `${Emojis.VOTE} ${votes} voto(s)`
+      );
+    }).join('\n\n');
 
     return new EmbedBuilder()
       .setTitle(`${Emojis.SKULL} O Impostor Escapou!`)
       .setDescription(
         `${Emojis.IMPOSTOR} O impostor venceu!\n\n` +
         `${reason}\n\n` +
-        `${Emojis.IMPOSTOR} O impostor era: **<@${results.impostorId}>**\n\n` +
+        `${Emojis.IMPOSTOR} O impostor era **<@${results.impostorId}>** (Resposta **${results.impostorLabel}**)\n\n` +
         `**Perguntas da rodada:**\n` +
         `${Emojis.PLAYER} Normal: *"${results.questionPair.question_normal}"*\n` +
         `${Emojis.IMPOSTOR} Impostor: *"${results.questionPair.question_impostor}"*\n\n` +
-        `**Votos:**\n${voteDetails}`
+        `**Revelação das respostas:**\n\n${revealList}`
       )
       .setColor(Colors.DEFEAT)
       .setFooter({ text: 'Dilo — O impostor enganou todos!' })
@@ -227,9 +223,6 @@ const DiloEmbeds = {
   // INFORMATIVOS
   // ==========================================
 
-  /**
-   * Embed de regras do jogo.
-   */
   rules() {
     return new EmbedBuilder()
       .setTitle(`${Emojis.SCROLL} Regras do Dilo`)
@@ -240,27 +233,25 @@ const DiloEmbeds = {
         `1. Use \`/jogar\` para criar um lobby.\n` +
         `2. Jogadores entram clicando no botão.\n` +
         `3. O anfitrião inicia a partida.\n` +
-        `4. Cada jogador recebe uma pergunta por DM.\n` +
-        `5. Respondam no canal, um por vez.\n` +
-        `6. Votem em quem acham que é o impostor!\n\n` +
+        `4. Cada jogador recebe uma pergunta por DM e responde **na DM** (todos ao mesmo tempo).\n` +
+        `5. Quando todos responderem, as respostas aparecem no canal de forma **anônima** (Resposta A, B, C...).\n` +
+        `6. Votem em qual resposta acham que é do impostor!\n\n` +
         `**${Emojis.IMPOSTOR} O Impostor:**\n` +
         `Recebe uma pergunta parecida, mas diferente. Deve responder de forma convincente para não ser descoberto.\n\n` +
         `**${Emojis.TROPHY} Vitória:**\n` +
-        `• Jogadores vencem se votarem corretamente no impostor.\n` +
+        `• Jogadores vencem se votarem na resposta do impostor.\n` +
         `• O impostor vence se não for o mais votado (ou em caso de empate).`
       )
       .addFields(
         { name: `${Emojis.PLAYERS} Jogadores`, value: `${GameConfig.MIN_PLAYERS} a ${GameConfig.MAX_PLAYERS}`, inline: true },
         { name: `${Emojis.CLOCK} Tempo de Voto`, value: `${GameConfig.VOTING_TIMEOUT / 1000}s`, inline: true },
+        { name: `${Emojis.CLOCK} Tempo de Resposta`, value: `${GameConfig.ANSWERING_TIMEOUT / 1000}s`, inline: true },
       )
       .setColor(Colors.INFO)
       .setFooter({ text: 'Dilo — O Jogo do Impostor' })
       .setTimestamp();
   },
 
-  /**
-   * Embed de configuração do canal.
-   */
   channelConfigured(channelId) {
     return new EmbedBuilder()
       .setTitle(`${Emojis.SETTINGS} Canal Configurado`)
@@ -273,9 +264,6 @@ const DiloEmbeds = {
       .setTimestamp();
   },
 
-  /**
-   * Embed de placar/leaderboard.
-   */
   leaderboard(scores, guildName) {
     if (scores.length === 0) {
       return new EmbedBuilder()
@@ -303,9 +291,6 @@ const DiloEmbeds = {
       .setTimestamp();
   },
 
-  /**
-   * Embed de erro genérico.
-   */
   error(message) {
     return new EmbedBuilder()
       .setTitle(`${Emojis.CROSS} Erro`)
@@ -313,9 +298,6 @@ const DiloEmbeds = {
       .setColor(Colors.DEFEAT);
   },
 
-  /**
-   * Embed de sucesso genérico.
-   */
   success(message) {
     return new EmbedBuilder()
       .setTitle(`${Emojis.CHECK} Sucesso`)
@@ -323,9 +305,6 @@ const DiloEmbeds = {
       .setColor(Colors.VICTORY);
   },
 
-  /**
-   * Embed de DM falhou.
-   */
   dmFailed(failedUsers) {
     const list = failedUsers.map(u => `• <@${u}>`).join('\n');
     return new EmbedBuilder()
@@ -337,9 +316,6 @@ const DiloEmbeds = {
       .setColor(Colors.VOTING);
   },
 
-  /**
-   * Embed de partida cancelada.
-   */
   gameCancelled(reason) {
     return new EmbedBuilder()
       .setTitle(`${Emojis.CROSS} Partida Cancelada`)

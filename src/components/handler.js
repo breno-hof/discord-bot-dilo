@@ -12,50 +12,17 @@ const DiloEmbeds = require('../utils/embeds');
 const { Emojis, GameConfig } = require('../utils/constants');
 
 /**
- * Handler principal para interações de componentes (botões, menus, modais).
+ * Handler principal para interações de componentes (botões e menus).
  */
 async function handleComponent(interaction) {
   const customId = interaction.customId;
 
-  // ==========================================
-  // BOTÕES DO LOBBY
-  // ==========================================
-
-  if (customId === 'dilo_join') {
-    return handleJoin(interaction);
-  }
-
-  if (customId === 'dilo_leave') {
-    return handleLeave(interaction);
-  }
-
-  if (customId === 'dilo_start') {
-    return handleStart(interaction);
-  }
-
-  // ==========================================
-  // BOTÃO DE RESPOSTA
-  // ==========================================
-
-  if (customId === 'dilo_answer') {
-    return handleAnswerButton(interaction);
-  }
-
-  // ==========================================
-  // MENU DE VOTAÇÃO
-  // ==========================================
-
-  if (customId === 'dilo_vote') {
-    return handleVote(interaction);
-  }
-
-  // ==========================================
-  // BOTÃO DE JOGAR NOVAMENTE
-  // ==========================================
-
-  if (customId === 'dilo_play_again') {
-    return handlePlayAgain(interaction);
-  }
+  if (customId === 'dilo_join')        return handleJoin(interaction);
+  if (customId === 'dilo_leave')       return handleLeave(interaction);
+  if (customId === 'dilo_start')       return handleStart(interaction);
+  if (customId === 'dilo_dm_answer')   return handleDmAnswerButton(interaction);
+  if (customId === 'dilo_vote')        return handleVote(interaction);
+  if (customId === 'dilo_play_again')  return handlePlayAgain(interaction);
 }
 
 /**
@@ -68,7 +35,7 @@ async function handleModal(interaction) {
 }
 
 // ==========================================
-// IMPLEMENTAÇÕES
+// LOBBY
 // ==========================================
 
 async function handleJoin(interaction) {
@@ -93,9 +60,7 @@ async function handleJoin(interaction) {
     });
   }
 
-  // Atualizar embed do lobby
   await updateLobbyEmbed(interaction, session);
-
   await interaction.reply({
     content: `${Emojis.CHECK} <@${interaction.user.id}> entrou no lobby!`,
     ephemeral: true,
@@ -120,7 +85,6 @@ async function handleLeave(interaction) {
     });
   }
 
-  // Se não sobrou ninguém, cancelar
   if (session.players.size === 0) {
     gameManager.forceEndSession(interaction.guildId);
     await interaction.update({
@@ -130,14 +94,16 @@ async function handleLeave(interaction) {
     return;
   }
 
-  // Atualizar embed do lobby
   await updateLobbyEmbed(interaction, session);
-
   await interaction.reply({
     content: `${Emojis.CROSS} <@${interaction.user.id}> saiu do lobby.`,
     ephemeral: true,
   });
 }
+
+// ==========================================
+// INÍCIO DA PARTIDA
+// ==========================================
 
 async function handleStart(interaction) {
   const session = gameManager.getSession(interaction.guildId);
@@ -148,7 +114,6 @@ async function handleStart(interaction) {
     });
   }
 
-  // Apenas o host pode iniciar
   if (interaction.user.id !== session.hostId) {
     return interaction.reply({
       embeds: [DiloEmbeds.error(`Apenas o anfitrião (<@${session.hostId}>) pode iniciar a partida.`)],
@@ -163,68 +128,91 @@ async function handleStart(interaction) {
     });
   }
 
-  // Defer para ter mais tempo
   await interaction.deferUpdate();
 
   try {
-    // Iniciar o jogo
-    const { playerOrder, dmResults } = await session.startGame();
-
-    // Verificar DMs que falharam
+    const { dmResults } = await session.startGame();
     const failedDMs = dmResults.filter(r => !r.success).map(r => r.userId);
 
-    // Remover botões do lobby
+    // Fechar lobby
     await interaction.editReply({
       embeds: [DiloEmbeds.lobby(session.getPlayerList(), session.hostId, interaction.guild.name)],
       components: [],
     });
 
-    // Aviso de DMs falhadas
+    const channel = await interaction.client.channels.fetch(session.channelId);
+
+    // Aviso de DMs bloqueadas
     if (failedDMs.length > 0) {
-      const channel = await interaction.client.channels.fetch(session.channelId);
       await channel.send({ embeds: [DiloEmbeds.dmFailed(failedDMs)] });
     }
 
-    // Enviar embed de início da rodada
-    const channel = await interaction.client.channels.fetch(session.channelId);
-    await channel.send({
-      embeds: [DiloEmbeds.roundStart(playerOrder, session.getPlayerList())],
-    });
-
-    // Aguardar um momento e iniciar as respostas
+    // Anunciar início e aguardar respostas
+    await channel.send({ embeds: [DiloEmbeds.roundStart(session.players.size)] });
     await sleep(GameConfig.ROUND_DELAY);
 
-    // Enviar prompt para o primeiro jogador
-    await sendTurnPrompt(channel, session);
+    // Enviar mensagem de progresso no canal
+    const progressMsg = await channel.send({
+      embeds: [DiloEmbeds.awaitingAnswers(0, session.players.size)],
+    });
+    session.answeringMessageId = progressMsg.id;
+
+    // Timer global de respostas
+    const timer = setTimeout(async () => {
+      if (session.state === 'answering') {
+        session.forceRemainingAnswers();
+        await startVotingPhase(channel, session);
+      }
+    }, GameConfig.ANSWERING_TIMEOUT);
+
+    session.addTimer(timer);
 
   } catch (err) {
     console.error('Erro ao iniciar partida:', err);
     gameManager.forceEndSession(interaction.guildId);
-    const channel = await interaction.client.channels.fetch(session.channelId);
-    await channel.send({
-      embeds: [DiloEmbeds.gameCancelled(`Erro ao iniciar a partida: ${err.message}`)],
-    });
+    try {
+      const channel = await interaction.client.channels.fetch(session.channelId);
+      await channel.send({
+        embeds: [DiloEmbeds.gameCancelled(`Erro ao iniciar a partida: ${err.message}`)],
+      });
+    } catch {}
   }
 }
 
-async function handleAnswerButton(interaction) {
-  const session = gameManager.getSession(interaction.guildId);
-  if (!session || session.state !== 'answering') {
+// ==========================================
+// RESPOSTAS VIA DM
+// ==========================================
+
+/**
+ * Jogador clica no botão "Responder" na DM — abre o modal.
+ * Esta interação vem de uma DM, não de um servidor.
+ */
+async function handleDmAnswerButton(interaction) {
+  // Buscar a sessão do jogador (percorre todas as sessões ativas)
+  const session = findSessionByPlayer(interaction.user.id);
+
+  if (!session) {
     return interaction.reply({
-      embeds: [DiloEmbeds.error('Não é hora de responder.')],
+      embeds: [DiloEmbeds.error('Não há partida ativa para você no momento.')],
       ephemeral: true,
     });
   }
 
-  const currentPlayer = session.getCurrentPlayer();
-  if (!currentPlayer || currentPlayer.id !== interaction.user.id) {
+  if (session.state !== 'answering') {
     return interaction.reply({
-      embeds: [DiloEmbeds.error('Não é sua vez de responder!')],
+      embeds: [DiloEmbeds.error('A fase de respostas já encerrou.')],
       ephemeral: true,
     });
   }
 
-  // Abrir modal para resposta
+  if (session.answers.has(interaction.user.id)) {
+    return interaction.reply({
+      content: `${Emojis.CHECK} Você já enviou sua resposta! Aguarde os outros jogadores.`,
+      ephemeral: true,
+    });
+  }
+
+  // Abrir modal
   const modal = new ModalBuilder()
     .setCustomId('dilo_answer_modal')
     .setTitle(`${Emojis.QUESTION} Sua Resposta`);
@@ -232,29 +220,36 @@ async function handleAnswerButton(interaction) {
   const answerInput = new TextInputBuilder()
     .setCustomId('answer_text')
     .setLabel('Digite sua resposta')
-    .setPlaceholder('Responda à pergunta que recebeu na DM...')
+    .setPlaceholder('Responda à pergunta que recebeu acima...')
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(true)
     .setMaxLength(500);
 
   modal.addComponents(new ActionRowBuilder().addComponents(answerInput));
-
   await interaction.showModal(modal);
 }
 
+/**
+ * Jogador submete o modal de resposta (vindo da DM).
+ */
 async function handleAnswerSubmit(interaction) {
-  const session = gameManager.getSession(interaction.guildId);
-  if (!session || session.state !== 'answering') {
+  const session = findSessionByPlayer(interaction.user.id);
+
+  if (!session) {
     return interaction.reply({
-      embeds: [DiloEmbeds.error('Não é hora de responder.')],
+      embeds: [DiloEmbeds.error('Não há partida ativa para você.')],
+      ephemeral: true,
+    });
+  }
+
+  if (session.state !== 'answering') {
+    return interaction.reply({
+      embeds: [DiloEmbeds.error('A fase de respostas já encerrou.')],
       ephemeral: true,
     });
   }
 
   const answer = interaction.fields.getTextInputValue('answer_text');
-  const turnNumber = session.currentPlayerIndex + 1;
-  const player = session.players.get(interaction.user.id);
-
   const result = session.submitAnswer(interaction.user.id, answer);
 
   if (!result.success) {
@@ -264,23 +259,40 @@ async function handleAnswerSubmit(interaction) {
     });
   }
 
-  // Mostrar a resposta no canal
+  // Confirmar para o jogador na DM
   await interaction.reply({
-    embeds: [DiloEmbeds.playerAnswer(player, answer, turnNumber)],
+    content: `${Emojis.CHECK} Resposta enviada! Aguarde os outros jogadores...`,
+    ephemeral: true,
   });
 
-  const channel = await interaction.client.channels.fetch(session.channelId);
+  // Atualizar barra de progresso no canal do servidor
+  try {
+    const channel = await interaction.client.channels.fetch(session.channelId);
+    const progressMsg = await channel.messages.fetch(session.answeringMessageId);
+    await progressMsg.edit({
+      embeds: [DiloEmbeds.awaitingAnswers(result.answeredCount, result.totalPlayers)],
+    });
 
-  if (result.allAnswered) {
-    // Todos responderam — iniciar votação
-    await sleep(GameConfig.ROUND_DELAY);
-    await startVotingPhase(channel, session);
-  } else {
-    // Próximo jogador
-    await sleep(1500);
-    await sendTurnPrompt(channel, session);
+    // Se todos responderam, iniciar votação
+    if (result.allAnswered) {
+      await sleep(GameConfig.ROUND_DELAY);
+      await startVotingPhase(channel, session);
+    }
+  } catch (err) {
+    console.error('Erro ao atualizar progresso:', err);
+    // Tentar iniciar votação mesmo assim se todos responderam
+    if (result.allAnswered && session.state === 'answering') {
+      try {
+        const channel = await interaction.client.channels.fetch(session.channelId);
+        await startVotingPhase(channel, session);
+      } catch {}
+    }
   }
 }
+
+// ==========================================
+// VOTAÇÃO ANÔNIMA
+// ==========================================
 
 async function handleVote(interaction) {
   const session = gameManager.getSession(interaction.guildId);
@@ -291,8 +303,8 @@ async function handleVote(interaction) {
     });
   }
 
-  const targetId = interaction.values[0];
-  const result = session.castVote(interaction.user.id, targetId);
+  const targetLabel = interaction.values[0]; // letra: 'A', 'B', etc.
+  const result = session.castVote(interaction.user.id, targetLabel);
 
   if (!result.success) {
     return interaction.reply({
@@ -302,29 +314,35 @@ async function handleVote(interaction) {
   }
 
   await interaction.reply({
-    content: `${Emojis.CHECK} Seu voto foi registrado!`,
+    content: `${Emojis.CHECK} Voto na **Resposta ${targetLabel}** registrado!`,
     ephemeral: true,
   });
 
-  // Atualizar progresso
   const channel = await interaction.client.channels.fetch(session.channelId);
 
   if (result.allVoted) {
-    // Todos votaram — revelar resultado
     await revealResults(channel, session);
   } else {
-    // Atualizar barra de progresso
+    // Atualizar embed de progresso de votos
     try {
       const votingMsg = await channel.messages.fetch(session.votingMessageId);
-      if (votingMsg) {
-        // Adicionar embed de progresso como follow-up
-      }
+      const anonymousAnswers = session.getAnonymousAnswers();
+      await votingMsg.edit({
+        embeds: [
+          DiloEmbeds.votingPhase(anonymousAnswers),
+          DiloEmbeds.votingProgress(result.totalVotes, result.totalPlayers),
+        ],
+        components: votingMsg.components,
+      });
     } catch {}
   }
 }
 
+// ==========================================
+// JOGAR NOVAMENTE
+// ==========================================
+
 async function handlePlayAgain(interaction) {
-  // Simular o comando /jogar
   const { getGuildConfig } = require('../database/queries');
 
   const config = getGuildConfig(interaction.guildId);
@@ -355,29 +373,8 @@ async function handlePlayAgain(interaction) {
     interaction.member.displayName
   );
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('dilo_join')
-      .setLabel('Entrar')
-      .setStyle(ButtonStyle.Success)
-      .setEmoji('🎮'),
-    new ButtonBuilder()
-      .setCustomId('dilo_leave')
-      .setLabel('Sair')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('🚪'),
-    new ButtonBuilder()
-      .setCustomId('dilo_start')
-      .setLabel('Iniciar Partida')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('🚀'),
-  );
-
-  const embed = DiloEmbeds.lobby(
-    session.getPlayerList(),
-    session.hostId,
-    interaction.guild.name
-  );
+  const row = buildLobbyRow();
+  const embed = DiloEmbeds.lobby(session.getPlayerList(), session.hostId, interaction.guild.name);
 
   const reply = await interaction.reply({
     embeds: [embed],
@@ -406,118 +403,83 @@ async function handlePlayAgain(interaction) {
 // FUNÇÕES AUXILIARES
 // ==========================================
 
+/**
+ * Busca a sessão ativa de um jogador pelo userId.
+ * Necessário para interações vindas de DMs (sem guildId).
+ */
+function findSessionByPlayer(userId) {
+  for (const [, session] of gameManager.sessions) {
+    if (session.players.has(userId)) {
+      return session;
+    }
+  }
+  return null;
+}
+
 async function updateLobbyEmbed(interaction, session) {
   try {
-    const embed = DiloEmbeds.lobby(
-      session.getPlayerList(),
-      session.hostId,
-      interaction.guild.name
-    );
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('dilo_join')
-        .setLabel('Entrar')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('🎮'),
-      new ButtonBuilder()
-        .setCustomId('dilo_leave')
-        .setLabel('Sair')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🚪'),
-      new ButtonBuilder()
-        .setCustomId('dilo_start')
-        .setLabel('Iniciar Partida')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🚀'),
-    );
-
     await interaction.message.edit({
-      embeds: [embed],
-      components: [row],
+      embeds: [DiloEmbeds.lobby(session.getPlayerList(), session.hostId, interaction.guild.name)],
+      components: [buildLobbyRow()],
     });
   } catch (err) {
     console.error('Erro ao atualizar lobby:', err);
   }
 }
 
-async function sendTurnPrompt(channel, session) {
-  const currentPlayer = session.getCurrentPlayer();
-  if (!currentPlayer) return;
-
-  const turnNumber = session.currentPlayerIndex + 1;
-  const totalPlayers = session.players.size;
-
-  const row = new ActionRowBuilder().addComponents(
+function buildLobbyRow() {
+  return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('dilo_answer')
-      .setLabel('Responder')
+      .setCustomId('dilo_join')
+      .setLabel('Entrar')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('🎮'),
+    new ButtonBuilder()
+      .setCustomId('dilo_leave')
+      .setLabel('Sair')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('🚪'),
+    new ButtonBuilder()
+      .setCustomId('dilo_start')
+      .setLabel('Iniciar Partida')
       .setStyle(ButtonStyle.Primary)
-      .setEmoji('✍️'),
+      .setEmoji('🚀'),
   );
-
-  await channel.send({
-    embeds: [DiloEmbeds.playerTurn(currentPlayer, turnNumber, totalPlayers)],
-    components: [row],
-  });
-
-  // Timer para pular jogador se demorar
-  const timer = setTimeout(async () => {
-    if (session.state === 'answering') {
-      const cp = session.getCurrentPlayer();
-      if (cp && cp.id === currentPlayer.id) {
-        // Pular jogador
-        const result = session.submitAnswer(currentPlayer.id, '*Não respondeu a tempo*');
-        await channel.send({
-          embeds: [DiloEmbeds.playerAnswer(currentPlayer, '*Não respondeu a tempo*', turnNumber)],
-        });
-
-        if (result.allAnswered) {
-          await sleep(GameConfig.ROUND_DELAY);
-          await startVotingPhase(channel, session);
-        } else {
-          await sleep(1500);
-          await sendTurnPrompt(channel, session);
-        }
-      }
-    }
-  }, GameConfig.ANSWER_TIMEOUT);
-
-  session.addTimer(timer);
 }
 
 async function startVotingPhase(channel, session) {
+  // Evitar dupla execução
+  if (session.state !== 'answering') return;
+
   session.startVoting();
 
-  const players = session.getPlayerList();
-  const answers = Object.fromEntries(session.answers);
+  const anonymousAnswers = session.getAnonymousAnswers();
 
-  // Criar menu de seleção para votação
-  const options = players.map(p => ({
-    label: p.displayName,
-    description: `Votar em ${p.displayName}`,
-    value: p.id,
+  // Montar opções do select menu com as letras
+  const options = anonymousAnswers.map(({ label, answer }) => ({
+    label: `Resposta ${label}`,
+    description: answer.length > 50 ? answer.substring(0, 47) + '...' : answer,
+    value: label,
     emoji: Emojis.TARGET,
   }));
 
   const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId('dilo_vote')
-      .setPlaceholder(`${Emojis.VOTE} Selecione o suspeito...`)
+      .setPlaceholder(`${Emojis.VOTE} Selecione a resposta suspeita...`)
       .addOptions(options),
   );
 
   const msg = await channel.send({
-    embeds: [DiloEmbeds.votingPhase(players, answers)],
+    embeds: [DiloEmbeds.votingPhase(anonymousAnswers)],
     components: [row],
   });
 
   session.votingMessageId = msg.id;
 
-  // Timer para encerrar votação
+  // Timer de votação
   const timer = setTimeout(async () => {
     if (session.state === 'voting') {
-      // Forçar resultado com os votos existentes
       await revealResults(channel, session);
     }
   }, GameConfig.VOTING_TIMEOUT);
@@ -526,14 +488,15 @@ async function startVotingPhase(channel, session) {
 }
 
 async function revealResults(channel, session) {
+  // Evitar dupla execução
+  if (session.state !== 'voting') return;
+
   const results = session.calculateResults();
 
-  // Escolher embed baseado no resultado
   const embed = results.impostorCaught
     ? DiloEmbeds.resultImpostorCaught(results)
     : DiloEmbeds.resultImpostorWon(results);
 
-  // Botão de jogar novamente
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('dilo_play_again')
@@ -542,20 +505,14 @@ async function revealResults(channel, session) {
       .setEmoji('🔄'),
   );
 
-  await channel.send({
-    embeds: [embed],
-    components: [row],
-  });
+  await channel.send({ embeds: [embed], components: [row] });
 
   // Remover componentes da mensagem de votação
   try {
     const votingMsg = await channel.messages.fetch(session.votingMessageId);
-    if (votingMsg) {
-      await votingMsg.edit({ components: [] });
-    }
+    if (votingMsg) await votingMsg.edit({ components: [] });
   } catch {}
 
-  // Encerrar sessão
   session.endGame();
 }
 
