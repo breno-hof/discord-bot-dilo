@@ -28,7 +28,7 @@ db.exec(`
   );
 `);
 
-// 200 duplas de perguntas correlatas
+// 250 duplas de perguntas correlatas
 const pairs = [
   // ===== COMIDA E BEBIDA (1-30) =====
   ["Qual sua fruta favorita?", "Qual sua sobremesa favorita?", "comida"],
@@ -163,7 +163,6 @@ const pairs = [
   ["Se pudesse ter qualquer carro, qual seria?", "Se pudesse ter qualquer casa, como seria?", "hipotetico"],
   ["Se tivesse que comer uma coisa pro resto da vida, o que seria?", "Se tivesse que ouvir uma música pro resto da vida, qual seria?", "hipotetico"],
   ["Se pudesse mudar uma coisa no mundo, o que seria?", "Se pudesse mudar uma coisa em você, o que seria?", "hipotetico"],
-  ["Se fosse invisível por um dia, o que faria?", "Se pudesse voar por um dia, o que faria?", "hipotetico"],
   ["Se tivesse uma máquina do tempo, qual época visitaria?", "Se tivesse um portal dimensional, qual mundo visitaria?", "hipotetico"],
   ["Se pudesse dominar qualquer instrumento, qual seria?", "Se pudesse dominar qualquer esporte, qual seria?", "hipotetico"],
   ["Se escrevesse um livro, sobre o que seria?", "Se dirigisse um filme, sobre o que seria?", "hipotetico"],
@@ -243,6 +242,59 @@ const pairs = [
   ["Qual revolução histórica foi mais impactante?", "Qual movimento social foi mais impactante?", "cultura"],
   ["Qual sua teoria conspiratória favorita (por diversão)?", "Qual lenda urbana brasileira é sua favorita?", "cultura"],
   ["Qual é o sentido da vida para você?", "Qual é a coisa mais importante na vida para você?", "cultura"],
+
+  // ===== AMBIGUIDADE E MALÍCIA (201-250) =====
+  // Duplas com duplo sentido, subjetividade e provocação social
+  ["O que você faz quando está sozinho em casa à noite?", "O que você faz quando está sozinho no quarto?", "malicia"],
+  ["Qual é a coisa mais quente que você já fez?", "Qual é a coisa mais picante que você já comeu?", "malicia"],
+  ["O que você nunca faria na frente dos seus pais?", "O que você nunca faria na frente do seu chefe?", "malicia"],
+  ["Qual foi a última vez que você mentiu para alguém próximo?", "Qual foi a última vez que você omitiu algo importante?", "malicia"],
+  ["O que você faz quando ninguém está olhando?", "O que você faz quando acha que ninguém vai saber?", "malicia"],
+  ["Qual é o seu segredo mais bem guardado?", "Qual é a coisa que você nunca contou para ninguém?", "malicia"],
+  ["O que você faria com R$1000 que ninguém poderia saber?", "O que você compraria se ninguém fosse ver?", "malicia"],
+  ["Qual é a coisa mais estranha que você já fez por vontade própria?", "Qual é a coisa mais estranha que você já fez por pressão social?", "malicia"],
+  ["O que você pensa quando está num lugar silencioso?", "O que você pensa quando deveria estar prestando atenção?", "malicia"],
+  ["Qual é a sua maior fraqueza que você tenta esconder?", "Qual é o seu maior defeito que você tenta disfarçar?", "malicia"],
+  ["O que você faz com o celular quando está no banheiro?", "O que você faz com o celular quando deveria estar dormindo?", "malicia"],
+  ["Qual é a coisa mais constrangedora que já aconteceu com você?", "Qual é a coisa mais vergonhosa que você já fez?", "malicia"],
+  ["O que você faria se soubesse que não seria pego?", "O que você faria se pudesse apagar da memória de todos?", "malicia"],
+  ["Qual é o tipo de pessoa que te atrai mais?", "Qual é o tipo de pessoa que te deixa mais nervoso?", "malicia"],
+  ["O que você faz quando está com raiva mas precisa fingir que está bem?", "O que você faz quando está com ciúmes mas tenta esconder?", "malicia"],
+  ["Qual é a coisa mais cara que você já comprou por impulso?", "Qual é a coisa mais cara que você já escondeu que comprou?", "malicia"],
+  ["O que você faz quando está entediado numa festa?", "O que você faz quando quer ir embora mas não pode?", "malicia"],
+  ["Qual é o pior conselho que você já deu?", "Qual é o pior conselho que você já seguiu?", "malicia"],
+  ["O que você faria diferente se pudesse voltar aos 18 anos?", "O que você faria diferente se pudesse voltar à semana passada?", "malicia"],
+  ["Qual é a coisa mais atrevida que você já fez?", "Qual é a coisa mais ousada que você já pensou em fazer?", "malicia"],
+  ["O que você faz quando está com uma pessoa que não aguenta?", "O que você faz quando está com uma pessoa que te irrita?", "malicia"],
+  ["Qual é a mentira que você mais conta para si mesmo?", "Qual é a desculpa que você mais usa para os outros?", "malicia"],
+  ["O que você pesquisa no Google que nunca contaria para ninguém?", "O que você assiste no YouTube às 2 da manhã?", "malicia"],
+  ["Qual é a coisa mais íntima que você já compartilhou com um estranho?", "Qual é a coisa mais íntima que você nunca compartilhou com ninguém?", "malicia"],
+  ["O que você faz quando termina uma série e não sabe o que fazer da vida?", "O que você faz quando acaba o delivery e ainda está com fome?", "malicia"],
+  ["Qual é a coisa mais ridícula pela qual você já ficou com raiva?", "Qual é a coisa mais boba pela qual você já chorou?", "malicia"],
+  ["O que você faz quando percebe que enviou uma mensagem para a pessoa errada?", "O que você faz quando curte uma foto antiga sem querer?", "malicia"],
+  ["Qual é a coisa mais desnecessária que você já comprou?", "Qual é a coisa mais inútil que você ainda guarda?", "malicia"],
+  ["O que você faz quando está com vontade de falar algo mas sabe que não deve?", "O que você faz quando sabe de uma fofoca mas deveria ficar quieto?", "malicia"],
+  ["Qual é a coisa mais egoísta que você já fez?", "Qual é a coisa mais egoísta que você já pensou?", "malicia"],
+  ["O que você faz quando está com sono mas não consegue dormir?", "O que você faz quando está acordado às 3 da manhã pensando besteira?", "malicia"],
+  ["Qual é a coisa mais embaraçosa que você já enviou por mensagem?", "Qual é a coisa mais embaraçosa que você já postou nas redes sociais?", "malicia"],
+  ["O que você faz quando está num elevador com alguém em silêncio?", "O que você faz quando está numa fila longa com estranhos?", "malicia"],
+  ["Qual é a coisa mais questionável que você já fez por amor?", "Qual é a coisa mais questionável que você já fez por dinheiro?", "malicia"],
+  ["O que você faz quando alguém te dá um presente que você odeia?", "O que você faz quando alguém te faz um elogio que não acredita?", "malicia"],
+  ["Qual é a coisa mais suspeita que você já fez sem perceber?", "Qual é a coisa mais suspeita que você já fez de propósito?", "malicia"],
+  ["O que você faz quando está com ciúmes mas tenta parecer indiferente?", "O que você faz quando está com inveja mas finge torcer pelo outro?", "malicia"],
+  ["Qual é o pior momento em que você riu quando não devia?", "Qual é o pior momento em que você ficou sério quando todos riam?", "malicia"],
+  ["O que você faz quando descobre que falaram de você pelas costas?", "O que você faz quando você mesmo falou de alguém pelas costas?", "malicia"],
+  ["Qual é a coisa mais perigosa que você já fez por diversão?", "Qual é a coisa mais perigosa que você já fez por curiosidade?", "malicia"],
+  ["O que você faz quando está com vontade de sumir do mundo?", "O que você faz quando quer desaparecer de uma situação?", "malicia"],
+  ["Qual é a coisa mais impulsiva que você já fez e não se arrependeu?", "Qual é a coisa mais impulsiva que você já fez e se arrependeu?", "malicia"],
+  ["O que você faz quando alguém te pede um favor que não quer fazer?", "O que você faz quando precisa dizer não mas não consegue?", "malicia"],
+  ["Qual é a coisa mais inapropriada que você já pensou num momento sério?", "Qual é a coisa mais inapropriada que você já falou sem querer?", "malicia"],
+  ["O que você faz quando está com uma pessoa que fala demais?", "O que você faz quando está com uma pessoa que não para de reclamar?", "malicia"],
+  ["Qual é a coisa mais louca que você já fez para impressionar alguém?", "Qual é a coisa mais louca que você já fez para evitar uma situação?", "malicia"],
+  ["O que você faz quando percebe que está sendo observado?", "O que você faz quando percebe que alguém está te seguindo nas redes?", "malicia"],
+  ["Qual é a coisa mais íntima que você já revelou sem querer?", "Qual é a coisa mais íntima que alguém já revelou sobre você?", "malicia"],
+  ["O que você faz quando está com vontade de falar uma verdade que vai machucar?", "O que você faz quando sabe de algo que mudaria tudo mas prefere calar?", "malicia"],
+  ["Qual é a coisa mais difícil que você já teve que fingir não saber?", "Qual é a coisa mais difícil que você já teve que fingir não sentir?", "malicia"],
 ];
 
 // Limpar e inserir

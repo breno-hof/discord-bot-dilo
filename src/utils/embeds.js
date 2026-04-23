@@ -277,9 +277,7 @@ const DiloEmbeds = {
     const medals = ['🥇', '🥈', '🥉'];
     const list = scores.map((s, i) => {
       const medal = medals[i] || `**${i + 1}.**`;
-      const winRate = s.games_played > 0
-        ? Math.round(((s.wins + s.impostor_wins) / s.games_played) * 100)
-        : 0;
+      const winRate = Math.round((s.win_rate ?? 0) * 100);
       return `${medal} <@${s.user_id}> — **${s.wins + s.impostor_wins}** vitórias (${winRate}%) | ${s.games_played} jogos`;
     }).join('\n');
 

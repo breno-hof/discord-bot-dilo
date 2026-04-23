@@ -51,10 +51,17 @@ function getPlayerScore(guildId, userId) {
 
 function getGuildLeaderboard(guildId, limit = 10) {
   const db = getDatabase();
+  // Ordena por winrate real (vitórias / partidas jogadas).
+  // Mínimo de 1 jogo para evitar divisão por zero.
+  // Desempate: total de vitórias absolutas, depois partidas jogadas.
   return db.prepare(`
-    SELECT * FROM scores
+    SELECT *,
+      CAST(wins + impostor_wins AS REAL) / MAX(games_played, 1) AS win_rate
+    FROM scores
     WHERE guild_id = ?
-    ORDER BY wins DESC, impostor_wins DESC
+    ORDER BY win_rate DESC,
+             (wins + impostor_wins) DESC,
+             games_played DESC
     LIMIT ?
   `).all(guildId, limit);
 }
