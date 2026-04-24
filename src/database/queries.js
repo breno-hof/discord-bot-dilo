@@ -1,119 +1,135 @@
-const { getDatabase } = require('./init');
+const { getPool } = require('./init');
 
 // ==========================================
 // Configuração de Servidor (Guild)
 // ==========================================
 
-function getGuildConfig(guildId) {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM guild_config WHERE guild_id = ?').get(guildId);
+async function getGuildConfig(guildId) {
+  const db = getPool();
+  const { rows } = await db.query(
+    'SELECT * FROM guild_config WHERE guild_id = $1',
+    [guildId]
+  );
+  return rows[0] || null;
 }
 
-function setGuildChannel(guildId, channelId) {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO guild_config (guild_id, channel_id, updated_at)
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(guild_id) DO UPDATE SET
-      channel_id = excluded.channel_id,
-      updated_at = CURRENT_TIMESTAMP
-  `);
-  return stmt.run(guildId, channelId);
+async function setGuildChannel(guildId, channelId) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO guild_config (guild_id, channel_id, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (guild_id) DO UPDATE SET
+       channel_id = EXCLUDED.channel_id,
+       updated_at = NOW()`,
+    [guildId, channelId]
+  );
 }
 
 // ==========================================
 // Perguntas
 // ==========================================
 
-function getRandomQuestionPair() {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM question_pairs ORDER BY RANDOM() LIMIT 1').get();
+async function getRandomQuestionPair() {
+  const db = getPool();
+  const { rows } = await db.query(
+    'SELECT * FROM question_pairs ORDER BY RANDOM() LIMIT 1'
+  );
+  return rows[0] || null;
 }
 
-function getQuestionPairById(id) {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM question_pairs WHERE id = ?').get(id);
+async function getQuestionPairById(id) {
+  const db = getPool();
+  const { rows } = await db.query(
+    'SELECT * FROM question_pairs WHERE id = $1',
+    [id]
+  );
+  return rows[0] || null;
 }
 
-function getQuestionCount() {
-  const db = getDatabase();
-  return db.prepare('SELECT COUNT(*) as total FROM question_pairs').get().total;
+async function getQuestionCount() {
+  const db = getPool();
+  const { rows } = await db.query('SELECT COUNT(*) AS total FROM question_pairs');
+  return parseInt(rows[0].total, 10);
 }
 
 // ==========================================
 // Pontuações
 // ==========================================
 
-function getPlayerScore(guildId, userId) {
-  const db = getDatabase();
-  return db.prepare('SELECT * FROM scores WHERE guild_id = ? AND user_id = ?').get(guildId, userId);
+async function getPlayerScore(guildId, userId) {
+  const db = getPool();
+  const { rows } = await db.query(
+    'SELECT * FROM scores WHERE guild_id = $1 AND user_id = $2',
+    [guildId, userId]
+  );
+  return rows[0] || null;
 }
 
-function getGuildLeaderboard(guildId, limit = 10) {
-  const db = getDatabase();
+async function getGuildLeaderboard(guildId, limit = 10) {
+  const db = getPool();
   // Ordena por winrate real (vitórias / partidas jogadas).
-  // Mínimo de 1 jogo para evitar divisão por zero.
-  // Desempate: total de vitórias absolutas, depois partidas jogadas.
-  return db.prepare(`
-    SELECT *,
-      CAST(wins + impostor_wins AS REAL) / MAX(games_played, 1) AS win_rate
-    FROM scores
-    WHERE guild_id = ?
-    ORDER BY win_rate DESC,
-             (wins + impostor_wins) DESC,
-             games_played DESC
-    LIMIT ?
-  `).all(guildId, limit);
+  // NULLIF evita divisão por zero; desempate: vitórias absolutas, depois partidas.
+  const { rows } = await db.query(
+    `SELECT *,
+       (wins + impostor_wins)::FLOAT / NULLIF(games_played, 0) AS win_rate
+     FROM scores
+     WHERE guild_id = $1
+     ORDER BY win_rate DESC NULLS LAST,
+              (wins + impostor_wins) DESC,
+              games_played DESC
+     LIMIT $2`,
+    [guildId, limit]
+  );
+  return rows;
 }
 
-function updateScore(guildId, userId, isImpostor, impostorWon) {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO scores (guild_id, user_id, wins, losses, impostor_wins, impostor_losses, games_played)
-    VALUES (?, ?, ?, ?, ?, ?, 1)
-    ON CONFLICT(guild_id, user_id) DO UPDATE SET
-      wins = wins + ?,
-      losses = losses + ?,
-      impostor_wins = impostor_wins + ?,
-      impostor_losses = impostor_losses + ?,
-      games_played = games_played + 1
-  `);
+async function updateScore(guildId, userId, isImpostor, impostorWon) {
+  const db = getPool();
 
-  if (isImpostor) {
-    const w = impostorWon ? 1 : 0;
-    const l = impostorWon ? 0 : 1;
-    stmt.run(guildId, userId, 0, 0, w, l, 0, 0, w, l);
-  } else {
-    const w = impostorWon ? 0 : 1;
-    const l = impostorWon ? 1 : 0;
-    stmt.run(guildId, userId, w, l, 0, 0, w, l, 0, 0);
-  }
+  const wins          = (!isImpostor && !impostorWon) ? 1 : 0;
+  const losses        = (!isImpostor &&  impostorWon) ? 1 : 0;
+  const impostorWins  = ( isImpostor &&  impostorWon) ? 1 : 0;
+  const impostorLoss  = ( isImpostor && !impostorWon) ? 1 : 0;
+
+  await db.query(
+    `INSERT INTO scores (guild_id, user_id, wins, losses, impostor_wins, impostor_losses, games_played)
+     VALUES ($1, $2, $3, $4, $5, $6, 1)
+     ON CONFLICT (guild_id, user_id) DO UPDATE SET
+       wins             = scores.wins             + $3,
+       losses           = scores.losses           + $4,
+       impostor_wins    = scores.impostor_wins    + $5,
+       impostor_losses  = scores.impostor_losses  + $6,
+       games_played     = scores.games_played     + 1`,
+    [guildId, userId, wins, losses, impostorWins, impostorLoss]
+  );
 }
 
 // ==========================================
 // Histórico de Partidas
 // ==========================================
 
-function saveMatch(guildId, impostorId, impostorWon, playerCount, questionPairId) {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO match_history (guild_id, impostor_id, impostor_won, player_count, question_pair_id)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  return stmt.run(guildId, impostorId, impostorWon ? 1 : 0, playerCount, questionPairId);
+async function saveMatch(guildId, impostorId, impostorWon, playerCount, questionPairId) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO match_history (guild_id, impostor_id, impostor_won, player_count, question_pair_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [guildId, impostorId, impostorWon, playerCount, questionPairId]
+  );
 }
 
-function getGuildStats(guildId) {
-  const db = getDatabase();
-  return db.prepare(`
-    SELECT
-      COUNT(*) as total_matches,
-      SUM(CASE WHEN impostor_won = 1 THEN 1 ELSE 0 END) as impostor_victories,
-      SUM(CASE WHEN impostor_won = 0 THEN 1 ELSE 0 END) as player_victories,
-      AVG(player_count) as avg_players
-    FROM match_history
-    WHERE guild_id = ?
-  `).get(guildId);
+async function getGuildStats(guildId) {
+  const db = getPool();
+  const { rows } = await db.query(
+    `SELECT
+       COUNT(*)                                                    AS total_matches,
+       SUM(CASE WHEN impostor_won = TRUE  THEN 1 ELSE 0 END)      AS impostor_victories,
+       SUM(CASE WHEN impostor_won = FALSE THEN 1 ELSE 0 END)      AS player_victories,
+       AVG(player_count)                                          AS avg_players
+     FROM match_history
+     WHERE guild_id = $1`,
+    [guildId]
+  );
+  return rows[0] || null;
 }
 
 module.exports = {

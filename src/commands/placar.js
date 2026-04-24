@@ -8,7 +8,7 @@ module.exports = {
     .setDescription('Exibe o placar de vitórias do servidor.'),
 
   async execute(interaction) {
-    const scores = getGuildLeaderboard(interaction.guildId);
+    const scores = await getGuildLeaderboard(interaction.guildId);
     const guildName = interaction.guild.name;
 
     await interaction.reply({

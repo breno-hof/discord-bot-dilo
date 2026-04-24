@@ -1,15 +1,17 @@
 services:
-    discord-bot-dilo:
-        image: ghcr.io/devyor-dot-fun/discord-bot-dilo:main
-        container_name: discord-bot-dilo
-        restart: unless-stopped
-        environment:
-            - DISCORD_TOKEN=${DISCORD_TOKEN}
-            - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
-            - DATABASE_PATH=/app/data/dilo.db
-        volumes:
-            - dilo-data:/app/data
+  discord-bot-dilo:
+    image: ghcr.io/devyor-dot-fun/discord-bot-dilo:${IMAGE_TAG:-main}
+    container_name: discord-bot-dilo-production
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - DATABASE_URL=${DATABASE_URL}
+      - DB_SSL=${DB_SSL:-false}
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - proxy-network
 
-volumes:
-    dilo-data:
-        driver: local
+networks:
+  proxy-network:
+    external: true

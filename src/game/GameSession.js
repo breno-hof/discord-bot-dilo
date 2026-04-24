@@ -125,7 +125,7 @@ class GameSession extends EventEmitter {
     this.impostorId = playerIds[randomIndex];
 
     // Sortear dupla de perguntas
-    this.questionPair = getRandomQuestionPair();
+    this.questionPair = await getRandomQuestionPair();
 
     // Enviar perguntas via DM (todos ao mesmo tempo)
     const dmResults = await this._sendQuestions();
@@ -284,7 +284,7 @@ class GameSession extends EventEmitter {
   // RESULTADOS
   // ==========================================
 
-  calculateResults() {
+  async calculateResults() {
     this.state = GameState.RESULTS;
 
     // Contar votos por letra
@@ -317,11 +317,13 @@ class GameSession extends EventEmitter {
     const impostorWon = !impostorCaught;
 
     // Salvar pontuações
-    for (const [userId] of this.players) {
-      updateScore(this.guildId, userId, userId === this.impostorId, impostorWon);
-    }
+    await Promise.all(
+      Array.from(this.players.keys()).map((userId) =>
+        updateScore(this.guildId, userId, userId === this.impostorId, impostorWon)
+      )
+    );
 
-    saveMatch(this.guildId, this.impostorId, impostorWon, this.players.size, this.questionPair.id);
+    await saveMatch(this.guildId, this.impostorId, impostorWon, this.players.size, this.questionPair.id);
 
     // Montar revelação: cada letra com sua resposta, dono e votos recebidos
     const labelReveal = Object.entries(this.answerLabels).map(([label, userId]) => ({

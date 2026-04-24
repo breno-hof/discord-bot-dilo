@@ -7,7 +7,15 @@ function loadConfig() {
     return {
       token: process.env.DISCORD_TOKEN,
       clientId: process.env.DISCORD_CLIENT_ID,
-      databasePath: process.env.DATABASE_PATH || './data/dilo.db',
+      database: {
+        connectionString: process.env.DATABASE_URL || null,
+        host:     process.env.DB_HOST     || 'localhost',
+        port:     parseInt(process.env.DB_PORT || '5432', 10),
+        database: process.env.DB_NAME     || 'dilo',
+        user:     process.env.DB_USER     || 'dilo',
+        password: process.env.DB_PASSWORD || '',
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      },
     };
   }
 
@@ -16,7 +24,7 @@ function loadConfig() {
 
   if (!existsSync(envPath)) {
     console.error('❌ Configuração não encontrada.');
-    console.error('   Em produção: defina DISCORD_TOKEN e DISCORD_CLIENT_ID como variáveis de ambiente.');
+    console.error('   Em produção: defina DISCORD_TOKEN, DISCORD_CLIENT_ID e DATABASE_URL (ou DB_*) como variáveis de ambiente.');
     console.error('   Em desenvolvimento: copie env.example.json para env.json e preencha as variáveis.');
     process.exit(1);
   }
@@ -36,7 +44,15 @@ function loadConfig() {
     return {
       token: config.DISCORD_TOKEN,
       clientId: config.DISCORD_CLIENT_ID,
-      databasePath: config.DATABASE_PATH || './data/dilo.db',
+      database: {
+        connectionString: config.DATABASE_URL || null,
+        host:     config.DB_HOST     || 'localhost',
+        port:     parseInt(config.DB_PORT || '5432', 10),
+        database: config.DB_NAME     || 'dilo',
+        user:     config.DB_USER     || 'dilo',
+        password: config.DB_PASSWORD || '',
+        ssl: config.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      },
     };
   } catch (err) {
     console.error('❌ Erro ao ler env.json:', err.message);

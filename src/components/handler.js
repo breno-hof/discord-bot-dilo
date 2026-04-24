@@ -345,7 +345,7 @@ async function handleVote(interaction) {
 async function handlePlayAgain(interaction) {
   const { getGuildConfig } = require('../database/queries');
 
-  const config = getGuildConfig(interaction.guildId);
+  const config = await getGuildConfig(interaction.guildId);
   if (config && config.channel_id && config.channel_id !== interaction.channelId) {
     return interaction.reply({
       embeds: [DiloEmbeds.error(`Use \`/jogar\` no canal configurado: <#${config.channel_id}>`)],
@@ -491,7 +491,7 @@ async function revealResults(channel, session) {
   // Evitar dupla execução
   if (session.state !== 'voting') return;
 
-  const results = session.calculateResults();
+  const results = await session.calculateResults();
 
   const embed = results.impostorCaught
     ? DiloEmbeds.resultImpostorCaught(results)

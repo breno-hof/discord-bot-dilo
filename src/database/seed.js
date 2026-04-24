@@ -1,34 +1,51 @@
-const Database = require('better-sqlite3');
+/**
+ * seed.js — Popula o banco PostgreSQL com as duplas de perguntas.
+ *
+ * Uso:
+ *   DATABASE_URL=postgres://... node src/database/seed.js
+ *   ou configure env.json com DB_HOST, DB_USER, etc.
+ *
+ * O script é idempotente: usa INSERT ... ON CONFLICT DO NOTHING
+ * para não duplicar perguntas em execuções repetidas.
+ * Para forçar uma recarga completa, passe --reset como argumento.
+ */
+
+const { Pool } = require('pg');
+const { readFileSync, existsSync } = require('fs');
 const path = require('path');
 
-// Carrega config manualmente para o script de seed
-const { readFileSync, existsSync, mkdirSync } = require('fs');
+// ==========================================
+// Configuração de conexão
+// ==========================================
 
-let dbPath = './data/dilo.db';
-const envPath = path.resolve(__dirname, '../../env.json');
-if (existsSync(envPath)) {
-  const config = JSON.parse(readFileSync(envPath, 'utf-8'));
-  if (config.DATABASE_PATH) dbPath = config.DATABASE_PATH;
+function buildPoolConfig() {
+  if (process.env.DATABASE_URL) {
+    return { connectionString: process.env.DATABASE_URL, ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false };
+  }
+
+  const envPath = path.resolve(__dirname, '../../env.json');
+  if (existsSync(envPath)) {
+    const config = JSON.parse(readFileSync(envPath, 'utf-8'));
+    if (config.DATABASE_URL) {
+      return { connectionString: config.DATABASE_URL, ssl: config.DB_SSL === 'true' ? { rejectUnauthorized: false } : false };
+    }
+    return {
+      host:     config.DB_HOST     || 'localhost',
+      port:     parseInt(config.DB_PORT || '5432', 10),
+      database: config.DB_NAME     || 'dilo',
+      user:     config.DB_USER     || 'dilo',
+      password: config.DB_PASSWORD || '',
+    };
+  }
+
+  // Fallback para desenvolvimento local padrão
+  return { host: 'localhost', port: 5432, database: 'dilo', user: 'dilo', password: '' };
 }
 
-const fullPath = path.resolve(__dirname, '../../', dbPath);
-const dir = path.dirname(fullPath);
-if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+// ==========================================
+// 249 duplas de perguntas
+// ==========================================
 
-const db = new Database(fullPath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS question_pairs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    question_normal TEXT NOT NULL,
-    question_impostor TEXT NOT NULL,
-    category TEXT DEFAULT 'geral'
-  );
-`);
-
-// 250 duplas de perguntas correlatas
 const pairs = [
   // ===== COMIDA E BEBIDA (1-30) =====
   ["Qual sua fruta favorita?", "Qual sua sobremesa favorita?", "comida"],
@@ -243,8 +260,7 @@ const pairs = [
   ["Qual sua teoria conspiratória favorita (por diversão)?", "Qual lenda urbana brasileira é sua favorita?", "cultura"],
   ["Qual é o sentido da vida para você?", "Qual é a coisa mais importante na vida para você?", "cultura"],
 
-  // ===== AMBIGUIDADE E MALÍCIA (201-250) =====
-  // Duplas com duplo sentido, subjetividade e provocação social
+  // ===== AMBIGUIDADE E MALÍCIA (201-249) =====
   ["O que você faz quando está sozinho em casa à noite?", "O que você faz quando está sozinho no quarto?", "malicia"],
   ["Qual é a coisa mais quente que você já fez?", "Qual é a coisa mais picante que você já comeu?", "malicia"],
   ["O que você nunca faria na frente dos seus pais?", "O que você nunca faria na frente do seu chefe?", "malicia"],
@@ -297,22 +313,71 @@ const pairs = [
   ["Qual é a coisa mais difícil que você já teve que fingir não saber?", "Qual é a coisa mais difícil que você já teve que fingir não sentir?", "malicia"],
 ];
 
-// Limpar e inserir
-db.exec('DELETE FROM question_pairs');
+// ==========================================
+// Execução principal
+// ==========================================
 
-const insert = db.prepare(
-  'INSERT INTO question_pairs (question_normal, question_impostor, category) VALUES (?, ?, ?)'
-);
+async function main() {
+  const pool = new Pool(buildPoolConfig());
+  const forceReset = process.argv.includes('--reset');
 
-const insertMany = db.transaction((pairs) => {
-  for (const [normal, impostor, category] of pairs) {
-    insert.run(normal, impostor, category);
+  try {
+    // Garantir que a tabela existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS question_pairs (
+        id                SERIAL PRIMARY KEY,
+        question_normal   TEXT NOT NULL,
+        question_impostor TEXT NOT NULL,
+        category          TEXT DEFAULT 'geral'
+      )
+    `);
+
+    if (forceReset) {
+      await pool.query('TRUNCATE TABLE question_pairs RESTART IDENTITY CASCADE');
+      console.log('🗑️  Tabela question_pairs limpa (--reset).');
+    }
+
+    // Inserir com ON CONFLICT DO NOTHING (idempotente por conteúdo)
+    // Adiciona constraint única se não existir
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'question_pairs_content_unique'
+        ) THEN
+          ALTER TABLE question_pairs
+            ADD CONSTRAINT question_pairs_content_unique
+            UNIQUE (question_normal, question_impostor);
+        END IF;
+      END $$
+    `);
+
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const [normal, impostor, category] of pairs) {
+      const result = await pool.query(
+        `INSERT INTO question_pairs (question_normal, question_impostor, category)
+         VALUES ($1, $2, $3)
+         ON CONFLICT ON CONSTRAINT question_pairs_content_unique DO NOTHING`,
+        [normal, impostor, category]
+      );
+      if (result.rowCount > 0) inserted++;
+      else skipped++;
+    }
+
+    const { rows } = await pool.query('SELECT COUNT(*) AS total FROM question_pairs');
+    console.log(`✅ Seed concluído!`);
+    console.log(`   Inseridas: ${inserted} | Ignoradas (já existiam): ${skipped}`);
+    console.log(`   Total no banco: ${rows[0].total} duplas de perguntas.`);
+
+  } catch (err) {
+    console.error('❌ Erro no seed:', err.message);
+    process.exit(1);
+  } finally {
+    await pool.end();
   }
-});
+}
 
-insertMany(pairs);
-
-const count = db.prepare('SELECT COUNT(*) as total FROM question_pairs').get();
-console.log(`✅ Seed concluído! ${count.total} duplas de perguntas inseridas.`);
-
-db.close();
+main();

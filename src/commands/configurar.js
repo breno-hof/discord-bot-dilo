@@ -18,7 +18,7 @@ module.exports = {
   async execute(interaction) {
     const channel = interaction.options.getChannel('canal');
 
-    setGuildChannel(interaction.guildId, channel.id);
+    await setGuildChannel(interaction.guildId, channel.id);
 
     await interaction.reply({
       embeds: [DiloEmbeds.channelConfigured(channel.id)],

@@ -16,7 +16,7 @@ module.exports = {
 
   async execute(interaction) {
     // Verificar se o canal está configurado
-    const config = getGuildConfig(interaction.guildId);
+    const config = await getGuildConfig(interaction.guildId);
     if (config && config.channel_id && config.channel_id !== interaction.channelId) {
       return interaction.reply({
         embeds: [DiloEmbeds.error(

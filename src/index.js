@@ -8,7 +8,8 @@ const {
 const fs = require('fs');
 const path = require('path');
 const config = require('./utils/config');
-const { getDatabase } = require('./database/init');
+const { initDatabase, closeDatabase } = require('./database/init');
+const { getQuestionCount } = require('./database/queries');
 const { handleComponent, handleModal } = require('./components/handler');
 const { Emojis } = require('./utils/constants');
 
@@ -49,14 +50,19 @@ for (const file of commandFiles) {
 // EVENTOS
 // ==========================================
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`\n${Emojis.GAME} Dilo está online como ${c.user.tag}!`);
   console.log(`${Emojis.PLAYERS} Servindo ${c.guilds.cache.size} servidores.`);
 
-  // Inicializar banco de dados
-  const db = getDatabase();
-  const questionCount = db.prepare('SELECT COUNT(*) as total FROM question_pairs').get().total;
-  console.log(`${Emojis.SCROLL} ${questionCount} duplas de perguntas disponíveis.`);
+  // Inicializar banco de dados PostgreSQL
+  try {
+    await initDatabase();
+    const questionCount = await getQuestionCount();
+    console.log(`${Emojis.SCROLL} ${questionCount} duplas de perguntas disponíveis.`);
+  } catch (err) {
+    console.error('❌ Falha ao conectar ao banco de dados:', err.message);
+    process.exit(1);
+  }
 
   // Status do bot
   client.user.setActivity('🎭 /jogar para começar!', { type: 4 });
@@ -132,21 +138,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // GRACEFUL SHUTDOWN
 // ==========================================
 
-process.on('SIGINT', () => {
+async function shutdown() {
   console.log('\n🛑 Encerrando bot...');
-  const { closeDatabase } = require('./database/init');
-  closeDatabase();
+  await closeDatabase();
   client.destroy();
   process.exit(0);
-});
+}
 
-process.on('SIGTERM', () => {
-  console.log('\n🛑 Encerrando bot...');
-  const { closeDatabase } = require('./database/init');
-  closeDatabase();
-  client.destroy();
-  process.exit(0);
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // ==========================================
 // LOGIN
