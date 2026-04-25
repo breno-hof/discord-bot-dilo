@@ -10,8 +10,8 @@ services:
       - NODE_ENV=production
     restart: unless-stopped
     networks:
-      - proxy-network
+      - shared-proxy-network
 
 networks:
-  proxy-network:
+  shared-proxy-network:
     external: true
