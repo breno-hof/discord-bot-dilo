@@ -78,33 +78,45 @@ jobs:
           IMAGE_TAG: main
         run: |
           envsubst < infra/prod/docker-compose.yml > /tmp/docker-compose-deploy.yml
-          echo "=== docker-compose.yml a ser enviado ==="
-          cat /tmp/docker-compose-deploy.yml
+          # Não imprimir o arquivo: ele contém os segredos já substituídos
+          # e os logs do Actions são públicos neste repositório.
+          echo "docker-compose.yml gerado ($(wc -l < /tmp/docker-compose-deploy.yml) linhas)."
 
       - name: Deploy Docker project on Hostinger
         env:
           HOSTINGER_API_TOKEN: ${{ secrets.HOSTINGER_API_TOKEN }}
           HOSTINGER_VPS_ID: ${{ secrets.HOSTINGER_VPS_ID }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_SSL: ${{ secrets.DB_SSL }}
         run: |
-          COMPOSE_CONTENT=$(cat /tmp/docker-compose-deploy.yml)
+          # Monta o JSON com jq para escapar corretamente os valores dos segredos
+          # (sem interpolá-los diretamente no script).
+          jq -n \
+            --arg project_name "$PROJECT_NAME" \
+            --rawfile content /tmp/docker-compose-deploy.yml \
+            --arg environment "$(printf 'DISCORD_TOKEN=%s\nDISCORD_CLIENT_ID=%s\nDATABASE_URL=%s\nDB_SSL=%s' \
+                "$DISCORD_TOKEN" "$DISCORD_CLIENT_ID" "$DATABASE_URL" "$DB_SSL")" \
+            '{project_name: $project_name, content: $content, environment: $environment}' \
+            > /tmp/deploy-payload.json
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "https://developers.hostinger.com/api/vps/v1/virtual-machines/${HOSTINGER_VPS_ID}/docker" \
             -H "Authorization: Bearer ${HOSTINGER_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"project_name\": \"${{ env.PROJECT_NAME }}\",
-              \"content\": $(echo "$COMPOSE_CONTENT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
-              \"environment\": \"DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}\nDISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}\nDATABASE_URL=${{ secrets.DATABASE_URL }}\nDB_SSL=${{ secrets.DB_SSL }}\"
-            }")
+            --data-binary @/tmp/deploy-payload.json)
+
+          rm -f /tmp/deploy-payload.json /tmp/docker-compose-deploy.yml
 
           HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | head -n-1)
 
           echo "HTTP Status: $HTTP_STATUS"
-          echo "Response: $BODY"
 
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            # A resposta pode ecoar o conteúdo enviado; só exibir em caso de falha.
+            echo "Response: $BODY"
             echo "❌ Falha ao criar projeto. Status: $HTTP_STATUS"
             exit 1
           fi
