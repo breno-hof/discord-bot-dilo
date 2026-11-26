@@ -1,0 +1,21 @@
+node_modules
+npm-debug.log*
+.git
+.github
+.gitignore
+.dockerignore
+
+# Segredos e dados locais — nunca devem entrar na imagem
+env.json
+.env
+.env.*
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Arquivos que não são necessários em runtime
+infra/
+docker-compose*.yml
+README.md
+.DS_Store

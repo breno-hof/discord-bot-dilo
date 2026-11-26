@@ -173,7 +173,7 @@ async function handleStart(interaction) {
     try {
       const channel = await interaction.client.channels.fetch(session.channelId);
       await channel.send({
-        embeds: [DiloEmbeds.gameCancelled(`Erro ao iniciar a partida: ${err.message}`)],
+        embeds: [DiloEmbeds.gameCancelled('Ocorreu um erro ao iniciar a partida. Tente novamente.')],
       });
     } catch {}
   }
